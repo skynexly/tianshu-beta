@@ -11252,7 +11252,7 @@ ${houseDataText}`;
     try {
       const wv = (typeof Worldview !== 'undefined' && Worldview.getCurrent) ? await Worldview.getCurrent() : null;
       const video = wv && wv.phoneApps ? wv.phoneApps.video : null;
-      if (video && video.presetEnabled === false) return [];
+      if (!video || video.presetEnabled !== true) return [];
     } catch (_) {}
     return _LIVE_PRESET_ROOMS.map((m, i) => {
       if (!m || !String(m.title || '').trim()) return null;  // 没填标题的示例槽跳过

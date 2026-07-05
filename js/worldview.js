@@ -5941,9 +5941,9 @@ async function openPhoneAppsEditor() {
     const vg = pa.video || {};
     setVal('pa-video-name', vg.name);
     setVal('pa-video-desc', vg.desc);
-    // 启用预设主播：默认勾选，只有显式存 false 才不勾
+    // 启用预设主播：公测版默认不勾，只有显式存 true 才勾
     const presetChk = document.getElementById('pa-video-preset-enabled');
-    if (presetChk) presetChk.checked = vg.presetEnabled !== false;
+    if (presetChk) presetChk.checked = vg.presetEnabled === true;
 
   // 小屋
   const ct = pa.cottage || {};
