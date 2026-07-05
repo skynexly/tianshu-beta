@@ -5351,6 +5351,21 @@ async function pickDefaultTheme(value) {
   // 内置世界观自动加载（增量；已有的不自动覆盖，标记待更新）
   async function _loadBuiltinWorldviews() {
     try {
+      // 公测版：清除本地可能残留的心动模拟世界观（此前版本存过的），确保彻底隐藏
+      try {
+        await DB.del('worldviews', 'wv_heartsim');
+        let _l = await getWorldviewList();
+        if (Array.isArray(_l) && _l.some(e => e && e.id === 'wv_heartsim')) {
+          _l = _l.filter(e => e && e.id !== 'wv_heartsim');
+          await saveWorldviewList(_l);
+        }
+        const _bl = await DB.get('gameState', 'builtinLoaded');
+        if (_bl && _bl.value && _bl.value.wv_heartsim) {
+          delete _bl.value.wv_heartsim;
+          await DB.put('gameState', { key: 'builtinLoaded', value: _bl.value });
+        }
+      } catch(_) {}
+
       const builtinArr = window.__BUILTIN_WORLDVIEWS__;
       if (!builtinArr || !Array.isArray(builtinArr) || builtinArr.length === 0) return;
 

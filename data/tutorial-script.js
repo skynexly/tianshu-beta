@@ -92,8 +92,7 @@ const TUTORIAL_SCRIPT = {
     ],
     options: [
       { label: '我可以自己创建一个世界观吗？', next: 'create_worldview', showIf: { notVisited: 'create_worldview' } },
-      { label: '那心动模拟又是什么？', next: 'heartbeat_sim', showIf: { notVisited: 'heartbeat_sim' } },
-      { label: '我明白了。', next: 'guide_ending', showIf: { visited: ['create_worldview', 'heartbeat_sim'] } }
+      { label: '我明白了。', next: 'guide_ending' }
     ]
   },
 
@@ -102,18 +101,7 @@ const TUTORIAL_SCRIPT = {
       '啊，当然可以！创建世界观的地方也许你刚才就见过了，就在世界→世界观管理中，依旧是右上角三个点的菜单，可以新建纯手搓，也可以选择AI写卡助手，告诉AI你的想法，跟随引导就可以简单地搞定一个世界观啦。'
     ],
     options: [
-      { label: '那心动模拟又是什么？', next: 'heartbeat_sim', showIf: { notVisited: 'heartbeat_sim' } },
-      { label: '我明白了。', next: 'guide_ending', showIf: { visited: 'heartbeat_sim' } }
-    ]
-  },
-
-  heartbeat_sim: {
-    messages: [
-      '哦——这个的话，谈不上特别大众题材，请注意，这是一个"病娇"主题的世界观，已经存在风味各异但都对你十分偏执的男嘉宾……可能出现修罗场、囚禁、强制、压迫等比较激烈的情节，想要尝试一定要慎重哦？不过，它的有趣之处不完全是和病娇打交道，一定程度上，它也许是一个生存游戏……它存在数值判定，不同结局，UI层面的剧情交互，是一个短线的有明确目标的故事。你会在开局扮演一个被迫穿越的无辜者，必须攻略其中一位病娇才可以顺利回家。而你，想永远陷入这场危险游戏中，还是想要努力回家呢？或者都试试看也没问题呢XD'
-    ],
-    options: [
-      { label: '我可以自己创建一个世界观吗？', next: 'create_worldview', showIf: { notVisited: 'create_worldview' } },
-      { label: '我明白了。', next: 'guide_ending', showIf: { visited: 'create_worldview' } }
+      { label: '我明白了。', next: 'guide_ending' }
     ]
   },
 
