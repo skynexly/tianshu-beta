@@ -1,0 +1,8 @@
+_tmp_*
+*.bak.*
+node_modules/
+.operit/
+android/
+test_npc_imports/
+docs/
+lint-css.py
