@@ -6282,6 +6282,15 @@ bgImage: conv?.convBgImage || '',
   }
 
   function openConvSettingsModal() {
+    // 无当前对话时不进设置页（否则保存会因找不到对话而静默失败）
+    try {
+      const _cur = Conversations.getCurrent();
+      const _conv = _cur ? Conversations.getList().find(c => c.id === _cur) : null;
+      if (!_conv) {
+        UI.showToast('请先创建或进入一个对话');
+        return;
+      }
+    } catch(_) {}
     // v687.17：从 modal 改为 panel 全屏
     UI.showPanel('conv-settings');
     _switchCsTab('output'); // 默认显示输出 tab

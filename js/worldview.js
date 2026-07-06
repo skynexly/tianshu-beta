@@ -4941,22 +4941,68 @@ const allNPCs = [];
       html += '<div style="margin-bottom:16px"></div>';
     }
 
-    // 任务系统
-    const tasks = gp.taskTypes || [];
+    // 任务系统（读 gp.taskSystem.phases，每个阶段内含 types 任务类型）
+    const _ts = gp.taskSystem || {};
+    const phases = Array.isArray(_ts.phases) ? _ts.phases : [];
     html += '<div style="font-size:15px;font-weight:bold;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> 任务系统</div>';
-    if (tasks.length === 0) {
-      html += '<div style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">暂无任务类型</div>';
+    if (phases.length === 0) {
+      html += '<div style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">暂无任务阶段</div>';
     } else {
-      tasks.forEach(t => {
-        const phases = t.phases || [];
-        html += `<div class="card" style="padding:10px;margin-bottom:6px;border:1px solid var(--border);border-radius:6px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:14px;font-weight:bold;color:var(--accent)">${Utils.escapeHtml(t.label || '未命名')}</div>
-            <div style="font-size:11px;color:var(--text-secondary)">${phases.length} 阶段</div>
+      phases.forEach((ph, pi) => {
+        const types = Array.isArray(ph.types) ? ph.types : [];
+        const cr = ph.completionReward || { mode: 'none' };
+        let crSummary = '无';
+        if (cr.mode === 'attr' && cr.attr) crSummary = `${cr.attr} ${cr.value >= 0 ? '+' : ''}${cr.value || 0}`;
+        else if (cr.mode === 'free') crSummary = '自由奖励';
+        let typeHtml = '';
+        if (types.length === 0) {
+          typeHtml = '<div style="font-size:12px;color:var(--text-secondary);padding:6px 0">暂无任务类型</div>';
+        } else {
+          typeHtml = types.map(t => {
+            let rewardTag = '';
+            if (t.rewardMode === 'attr' && t.rewardAttr) rewardTag = `<span style="font-size:11px;color:var(--accent);background:color-mix(in srgb, var(--accent) 15%, transparent);padding:1px 6px;border-radius:4px;flex-shrink:0">${Utils.escapeHtml(t.rewardAttr)} ${t.rewardValue >= 0 ? '+' : ''}${t.rewardValue || 0}</span>`;
+            else if (t.rewardMode === 'free') rewardTag = `<span style="font-size:11px;color:var(--accent);background:color-mix(in srgb, var(--accent) 15%, transparent);padding:1px 6px;border-radius:4px;flex-shrink:0">自由奖励</span>`;
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;color:var(--text);font-weight:600">${Utils.escapeHtml(t.label || '未命名类型')}</div>
+                ${t.desc ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${Utils.escapeHtml(t.desc)}</div>` : ''}
+              </div>
+              ${rewardTag}
+            </div>`;
+          }).join('');
+        }
+        html += `<div class="card" style="padding:12px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:14px;font-weight:bold;color:var(--accent)">${Utils.escapeHtml(ph.name || ('阶段 ' + (pi + 1)))}</div>
+            <div style="font-size:11px;color:var(--text-secondary)">每批${ph.batchSize || 3} · 共${ph.totalTasks || 10}</div>
           </div>
-          ${t.desc ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px">${Utils.escapeHtml(t.desc)}</div>` : ''}
+          ${typeHtml}
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">阶段完成奖励：${Utils.escapeHtml(crSummary)}</div>
         </div>`;
       });
+    }
+
+    // 历法系统（折叠展示）
+    const cal = gp.calendarSystem;
+    if (cal) {
+      const _wk = (cal.weekDayNames || []).map((n, i) => {
+        const rest = (cal.weekDayTypes || [])[i] === 'rest';
+        return `<span style="display:inline-block;font-size:11px;padding:2px 8px;margin:2px;border-radius:4px;background:${rest ? 'color-mix(in srgb, var(--accent) 18%, transparent)' : 'var(--bg-tertiary)'};color:${rest ? 'var(--accent)' : 'var(--text-secondary)'}">${Utils.escapeHtml(n)}${rest ? '(休)' : ''}</span>`;
+      }).join('');
+      const _seasons = (cal.seasons || []).map(se => `<div style="font-size:12px;color:var(--text-secondary);padding:3px 0"><span style="color:var(--text);font-weight:600">${Utils.escapeHtml(se.name || '')}</span>　${(se.months || []).join('/')}月　${Utils.escapeHtml(se.weather || '')}</div>`).join('');
+      const _periods = (cal.timePeriods || []).map(tp => `<div style="font-size:12px;color:var(--text-secondary);padding:3px 0"><span style="color:var(--text);font-weight:600">${Utils.escapeHtml(tp.name || '')}</span>　${tp.startHour}时起　${Utils.escapeHtml(tp.desc || '')}</div>`).join('');
+      html += `<details style="margin-top:8px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <summary style="font-size:15px;font-weight:bold;color:var(--text);padding:10px 12px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
+          历法系统<span style="font-size:11px;color:var(--text-secondary);font-weight:normal">（点击展开）</span>
+        </summary>
+        <div style="padding:0 12px 12px">
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">每天 ${cal.hoursPerDay || 24} 小时 · 每周 ${cal.daysPerWeek || (cal.weekDayNames || []).length} 天 · 每年 ${cal.monthsPerYear || 12} 月</div>
+          ${_wk ? `<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">星期</div>${_wk}</div>` : ''}
+          ${_seasons ? `<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">季节</div>${_seasons}</div>` : ''}
+          ${_periods ? `<div><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">时段</div>${_periods}</div>` : ''}
+        </div>
+      </details>`;
     }
 
     if (!html.trim()) {
