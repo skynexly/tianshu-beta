@@ -3396,6 +3396,68 @@ ui.innerHTML = input.checked ? '<svg xmlns="http://www.w3.org/2000/svg" width="1
     customsData.push(_defaultCustom());
     editCustom(customsData.length - 1);
   }
+
+  // 从文档导入常驻条目（txt/md/json/docx/pdf）：按空行分段，每段一条常驻知识
+  async function importCustomsFromDoc() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,.md,.json,.docx,.pdf';
+    input.onchange = async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      let text = '';
+      try {
+        UI.showToast('正在解析文档...', 1500);
+        text = await Utils.readFileAsText(file);
+      } catch (err) {
+        UI.showToast('解析失败：' + (err && err.message ? err.message : '无法读取该文档'), 3000);
+        return;
+      }
+      text = String(text || '').replace(/\r\n/g, '\n').trim();
+      if (!text) { UI.showToast('文档中没有可导入的文本', 2500); return; }
+      // 按分隔线（单独一行的 --- / === / ***，至少3个）分段
+      let segs = [];
+      { const _lines = text.split('\n'); let _buf = [];
+        const _SEP = /^[ \t]*[-=*]{3,}[ \t]*$/;
+        for (const _ln of _lines) {
+          if (_SEP.test(_ln)) { const _s = _buf.join('\n').trim(); if (_s) segs.push(_s); _buf = []; }
+          else { _buf.push(_ln); }
+        }
+        const _sLast = _buf.join('\n').trim(); if (_sLast) segs.push(_sLast);
+      }
+      if (segs.length === 0) segs = [text];
+      const CAP = 100;
+      const docName = (file.name || '文档').replace(/\.[^.]+$/, '');
+      const _doImport = (list) => {
+        for (const seg of list) {
+          const firstLine = seg.split('\n')[0].trim();
+          const name = (firstLine.slice(0, 20) || docName) + (firstLine.length > 20 ? '...' : '');
+          const item = _defaultCustom();
+          item.name = name;
+          item.content = seg;
+          item.enabled = true;
+          item.keywordTrigger = false;
+          item.position = 'system_top';
+          item.depth = 0;
+          customsData.push(item);
+        }
+        _renderCustoms(customsData);
+        _wvExtAutoSave();
+        UI.showToast('已导入 ' + list.length + ' 条常驻条目', 2500);
+      };
+      if (segs.length > CAP) {
+        const ok1 = await UI.showConfirm('导入文档', `从《${docName}》解析出 ${segs.length} 段，超过建议上限 ${CAP} 段。常驻条目每轮都会全量注入，过多会占用大量上下文。\n是否只导入前 ${CAP} 段？（推荐）`);
+        if (ok1) { _doImport(segs.slice(0, CAP)); return; }
+        const ok2 = await UI.showConfirm('全部导入？', `确定要把全部 ${segs.length} 段都导入吗？内容很多时会明显占用上下文并增加消耗，建议导入后逐条改为「动态（关键词触发）」。`);
+        if (ok2) _doImport(segs);
+      } else {
+        const ok = await UI.showConfirm('导入文档', `从《${docName}》解析出 ${segs.length} 段，将作为常驻知识条目导入。\n\n分段规则：用单独一行的分隔线（--- 或 === 或 ***，至少3个符号）来分隔条目，分隔线之间的内容为一条。若整篇没有分隔线，则作为一条导入。\n\n提示：常驻条目每轮都会注入，内容较多时可在编辑后逐条改为「动态（关键词触发）」以节省上下文。\n确定导入吗？`);
+        if (ok) _doImport(segs);
+      }
+    };
+    input.click();
+  }
+
   function editCustom(i) {
     _editCustomIdx = i;
     const c = customsData[i] || _defaultCustom();
@@ -5806,7 +5868,7 @@ function _buildCalendarEditorHTML(cal) {
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           周设定
         </div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">一周有 ${cal.daysPerWeek} 天。填写完整名称（如"星期一"或"水曜日"），将直接显示在状态栏。</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">一周有 ${cal.daysPerWeek} 天。填写完整名称（如"星期一"或"水曜日"），将直接显示在状态栏。<br>星期名不可含阿拉伯数字（会干扰开场时间解析）。</div>
         <div id="cal-weekday-list">
           ${weekDayInputs}
         </div>
@@ -5916,7 +5978,13 @@ async function _calSaveAndRefresh() {
 async function _onCalWeekDayChange(idx, value) {
   const w = await _getEditingWV(); if (!w) return;
   const cal = _ensureCalendarSystem(w);
-  cal.weekDayNames[idx] = value;
+  // 星期名禁止含数字：数字会干扰开场时间解析（parseAbsoluteTime 靠数字锚定年月日时分），剥掉并同步回显
+  const clean = String(value == null ? '' : value).replace(/[0-9\uFF10-\uFF19]/g, '');
+  if (clean !== value) {
+    const inp = document.querySelector('#cal-weekday-list input[data-weekday-idx="' + idx + '"]');
+    if (inp) inp.value = clean;
+  }
+  cal.weekDayNames[idx] = clean;
   await _saveEditingWV(w);
 }
 
@@ -7578,7 +7646,7 @@ _radioAddTag, _radioEditTag, _radioDeleteTag, _radioOpenTagEditor, _radioBackToC
     _getEditingWV, _saveEditingWV, _renderGlobalNpcs: _renderGlobalNpcs, _renderRegions: _renderRegions, _renderFactionCards: _renderFactionCards, _renderNPCCards: _renderNPCCards, _fillStartTimeFields,
 editLorebookDescription,
     addFestival, editFestival, saveFestivalFromModal, deleteFestivalFromModal, closeFestivalModal, aiGenFestivals, _doAiGenFestivals,
-  addCustom, editCustom, saveCustomFromModal, deleteCustomFromModal, closeCustomModal,
+  addCustom, importCustomsFromDoc, editCustom, saveCustomFromModal, deleteCustomFromModal, closeCustomModal,
 addKnowledge, editKnowledge, saveKnowledgeFromModal, deleteKnowledgeFromModal, closeKnowledgeModal,
 toggleCustPositionDropdown, selectCustPosition, toggleKnowPositionDropdown, selectKnowPosition,
     getCurrent, setCurrentId, getCurrentId,
