@@ -503,7 +503,7 @@ const SingleCard = (() => {
 
   async function deleteCurrent() {
     if (!_editingId) return;
-    const ok = await UI.confirm('确定删除这个角色？相关对话不会被删除，但角色资料会丢失');
+    const ok = await UI.showConfirm('删除角色', '确定删除这个角色？相关对话不会被删除，但角色资料会丢失');
     if (!ok) return;
     await remove(_editingId);
     // 兼容新旧入口
