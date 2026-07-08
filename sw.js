@@ -1,5 +1,5 @@
 // Service Worker - 天枢城 PWA v2
-const CACHE_NAME = 'tianshu-v702.0-beta9';
+const CACHE_NAME = 'tianshu-v702.0-beta10';
 const PRE_CACHE = [
   './',
   './index.html',
@@ -36,6 +36,14 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
 
+  // 缓存兜底：match 落空时绝不能返回 null（iOS Safari 会直接报
+  // "FetchEvent.respondWith received an error: Returned response is null" 白屏）。
+  // 找不到就回一个合法的降级 Response。
+  const cacheFallback = (req) =>
+    caches.match(req).then(hit => hit || caches.match('./index.html')).then(hit =>
+      hit || new Response('', { status: 504, statusText: 'Offline and not cached' })
+    );
+
   // JS / CSS 文件：网络优先 + 缓存兜底。
   // 网络成功时用最新版并更新缓存；网络失败时从缓存兜底，避免 "DB is not defined" 白屏或样式丢失。
   // 始终对网络请求加 cache:'no-store' 跳过浏览器 HTTP 缓存，确保拿到最新文件。
@@ -49,7 +57,7 @@ self.addEventListener('fetch', e => {
           }
           return resp;
         })
-        .catch(() => caches.match(e.request))
+        .catch(() => cacheFallback(e.request))
     );
     return;
   }
@@ -65,6 +73,6 @@ self.addEventListener('fetch', e => {
         }
         return resp;
       })
-      .catch(() => caches.match(e.request))
+      .catch(() => cacheFallback(e.request))
   );
 });
