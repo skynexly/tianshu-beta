@@ -376,10 +376,13 @@ body:has(#panel-chat.active) #panel-chat .chat-messages {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* 性能：滚动容器隔离布局/绘制，避免外部重排牵连 */
-  contain: layout paint;
-  /* iOS/Android 上更平滑的惯性滚动 */
-  -webkit-overflow-scrolling: touch;
+  /* 性能：滚动容器隔离布局，避免外部重排牵连
+     注意：不用 paint containment——iOS 上 paint 隔离 + 动态增高内容会让
+     滚动合成层缓存旧的可滚动范围，导致"内容生成后卡在中间滑不下去"（仅 iOS 复现）。 */
+  contain: layout;
+  /* 不再使用 -webkit-overflow-scrolling: touch：
+     该属性是 iOS 12- 的历史包袱，iOS 13+ 原生滚动已平滑；且它会开独立合成滚动层，
+     动态增高内容时可滚动范围不刷新，是"生成后滑不下去"的头号元凶，故移除。 */
   /* 滚动时不要触发吸附等额外计算 */
   overscroll-behavior: contain;
   /* 让伪元素背景层有定位上下文 */
