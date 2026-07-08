@@ -180,7 +180,7 @@ try { await Gaiden.init(); } catch(e) { console.error('[Gaiden.init]', e); }
 
   // ===== 更新公告（登录成功后弹出，可拿到昵称）=====
   try {
-const APP_VERSION = 'v705.8';
+const APP_VERSION = 'v705.9';
     const CHANGELOG = `【v705.8 更新内容】
 🐛 修复面具绑定逻辑
 🐛 修复个人主页、通话记录页顶部被灵动岛遮挡导致 iOS 无法返回的问题
