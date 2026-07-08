@@ -4573,6 +4573,8 @@ function closeKnowledgeModal() {
     const charFilter = document.getElementById('char-filter-wrapper');
     const isNoWv = w.id === '__default_wv__';
     if (headerWrap) headerWrap.style.display = isNoWv ? 'none' : '';
+    // 无世界观时 header 被隐藏，sidebar-nav 直接顶到最上面，需补灵动岛/刘海安全区
+    try { document.getElementById('sidebar')?.classList.toggle('sidebar-no-header', isNoWv); } catch(_) {}
     if (charFilter) {
       charFilter.style.display = isNoWv ? 'block' : 'none';
       if (isNoWv && typeof Conversations !== 'undefined' && Conversations.refreshCharFilter) {
