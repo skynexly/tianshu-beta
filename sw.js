@@ -1,5 +1,5 @@
 // Service Worker - 天枢城 PWA v2
-const CACHE_NAME = 'tianshu-v702.0-beta10';
+const CACHE_NAME = 'tianshu-v702.0-beta11';
 const PRE_CACHE = [
   './',
   './index.html',
@@ -18,7 +18,11 @@ self.addEventListener('install', e => {
     caches.keys().then(keys =>
       Promise.all(keys.map(k => caches.delete(k)))
     ).then(() =>
-      caches.open(CACHE_NAME).then(cache => cache.addAll(PRE_CACHE))
+      caches.open(CACHE_NAME).then(cache =>
+        // 逐个 add，单个文件网络失败不拖垮整个 install（GitHub Pages 国内链路会偶发丢包，
+        // 若用 addAll 只要一个失败整个 sw 就装不上）
+        Promise.all(PRE_CACHE.map(u => cache.add(u).catch(() => {})))
+      )
     )
   );
 });
@@ -44,12 +48,34 @@ self.addEventListener('fetch', e => {
       hit || new Response('', { status: 504, statusText: 'Offline and not cached' })
     );
 
-  // JS / CSS 文件：网络优先 + 缓存兜底。
-  // 网络成功时用最新版并更新缓存；网络失败时从缓存兜底，避免 "DB is not defined" 白屏或样式丢失。
-  // 始终对网络请求加 cache:'no-store' 跳过浏览器 HTTP 缓存，确保拿到最新文件。
+  // JS / CSS 文件：缓存优先 + 后台更新（stale-while-revalidate）。
+  // 一旦成功缓存过一次，之后即使 GitHub Pages 链路抽风也能秒开，彻底摆脱
+  // "网络一抖就 Can't find variable: DB 白屏"。文件更新靠 ?v= 版本号变化（URL 变→必然回源）。
   if ((url.pathname.endsWith('.js') && !url.pathname.endsWith('sw.js')) || url.pathname.endsWith('.css')) {
     e.respondWith(
-      fetch(e.request, { cache: 'no-store' })
+      caches.match(e.request).then(cached => {
+        // 后台拉新（成功就更新缓存，供下次使用）；失败静默，不影响本次返回
+        const netFetch = fetch(e.request)
+          .then(resp => {
+            if (resp && resp.ok) {
+              const clone = resp.clone();
+              caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+            }
+            return resp;
+          })
+          .catch(() => null);
+        // 命中缓存：立即用缓存（不等网络）；未命中：等网络，网络失败再兜底
+        if (cached) return cached;
+        return netFetch.then(resp => resp || cacheFallback(e.request));
+      })
+    );
+    return;
+  }
+
+  // HTML 导航请求：网络优先（拿最新入口），失败回落缓存的 index.html，保证首屏能开。
+  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
+    e.respondWith(
+      fetch(e.request)
         .then(resp => {
           if (resp && resp.ok) {
             const clone = resp.clone();
@@ -62,17 +88,19 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 其它资源：网络优先，失败回落缓存；只缓存网络成功响应。
+  // 其它资源（图片/字体等）：缓存优先，未命中走网络并缓存，最终兜底。
   e.respondWith(
-    fetch(e.request)
-      .then(resp => {
-        // 只 200 才存
-        if (resp && resp.ok) {
-          const clone = resp.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return resp;
-      })
-      .catch(() => cacheFallback(e.request))
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request)
+        .then(resp => {
+          if (resp && resp.ok) {
+            const clone = resp.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          }
+          return resp;
+        })
+        .catch(() => cacheFallback(e.request));
+    })
   );
 });
