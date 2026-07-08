@@ -180,7 +180,7 @@ try { await Gaiden.init(); } catch(e) { console.error('[Gaiden.init]', e); }
 
   // ===== 更新公告（登录成功后弹出，可拿到昵称）=====
   try {
-const APP_VERSION = 'v706.0';
+const APP_VERSION = 'v706.1';
     const CHANGELOG = `【v706.0 更新内容】
 🐛 修复 iOS 部分机型内容生成后卡在中间、划不动的问题
 ✨ 优化聊天页滚动流畅度`;
