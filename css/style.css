@@ -439,8 +439,11 @@ body:has(#panel-chat.active) #panel-chat .chat-messages {
      做"屏外消息折叠成占位"的省渲染优化，但在华为浏览器上引发严重的滚动抖动——
      消息进出视口时实际高度（如 800px 长气泡）和占位高度（120px）来回切换，
      scrollHeight 跳变，浏览器修正 scrollTop 算错位置，表现为滚动时屏幕乱跳。
-     权衡：放弃屏外折叠这一项，仅保留 contain（布局/绘制隔离已经够省了）。 */
-  contain: layout paint style;
+     权衡：放弃屏外折叠这一项，仅保留 contain（布局/绘制隔离已经够省了）。
+     v706.2：去掉 paint containment——iOS Safari 上气泡是滚动内容里动态增高的子项，
+     paint 绘制层隔离会让 WebKit 的可滚动区域计算冻结，表现为"生成后卡在中间滑不动、
+     但按钮仍可点"。只保留 layout + style，布局/样式隔离仍在，省渲染影响很小。 */
+  contain: layout style;
 }
 
 /* v687.41g：气泡子树（markdown 渲染的 p/span/strong/em/li/blockquote 等）也禁选 */
