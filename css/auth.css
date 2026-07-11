@@ -798,7 +798,8 @@
 /* 个人主页内弹出的 modal 要盖在个人主页 overlay 上方
    #auth-profile-overlay z-index 是 99000，.modal 默认才 200 */
 .auth-modal-temp,
-#auth-pw-modal {
+#auth-pw-modal,
+#copy-text-modal {
   z-index: 99500 !important;
 }
 
