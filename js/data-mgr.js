@@ -53,6 +53,7 @@ const DataMgr = (() => {
   // 用纯文字（体积小、生成快、无 await 分片让出），保证分享在用户手势栈内触发，避免被安卓浏览器静默拒绝。
   // 不支持文件分享时降级为复制文本。
   async function shareLastExport() {
+    UI.showToast('正在生成分享内容…', 1500);
     let payload;
     try {
       payload = await _buildTextExport();
@@ -78,6 +79,7 @@ const DataMgr = (() => {
 
   // 复制文本：直接生成纯文字存档，放进可复制的框里。纯文字体积可控，无需体积保护。
   async function copyLastExport() {
+    UI.showToast('正在生成复制内容…', 1500);
     let payload;
     try {
       payload = await _buildTextExport();
