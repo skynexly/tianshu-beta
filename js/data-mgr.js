@@ -18,6 +18,73 @@ const DataMgr = (() => {
     try { await DB.put(storeName, item); } catch(e) { console.warn(`[DataMgr] 写入 ${storeName} 失败，跳过`, e, item); }
   }
 
+  // 最近一次导出生成的存档（供「分享文件 / 复制文本」兜底用）。
+  // 华为浏览器等环境的内核对 blob: + application/json 的 a.download 支持不好，会提示"不支持下载"，
+  // 这里把生成好的 blob 缓存下来，用户可再走系统分享或复制文本导出，不用重跑一次生成。
+  let _lastExportBlob = null;
+  let _lastExportName = '';
+
+  // 统一的下载触发：建临时 a 标签点击。返回是否"看起来触发成功"（无异常）。
+  // 注意：华为浏览器可能不报错但也不真的下载，所以这里只能保证代码层无异常，
+  // 真正的兜底靠用户手动点「分享文件 / 复制文本」。
+  function _triggerDownload(blob, fileName) {
+    _lastExportBlob = blob;
+    _lastExportName = fileName;
+    const url = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
+      return true;
+    } catch (e) {
+      console.warn('[DataMgr] 下载触发失败', e);
+      return false;
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  }
+
+  // 系统分享：把最近导出的存档作为文件分享（华为浏览器通常支持系统分享，可绕开下载限制）。
+  // files 分享不被支持时自动降级为复制文本。
+  async function shareLastExport() {
+    if (!_lastExportBlob) { UI.showToast('请先点上方任意「导出存档」生成一次存档', 2500); return; }
+    try {
+      const file = new File([_lastExportBlob], _lastExportName || 'skynex-save.json', { type: 'application/json' });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: '天枢城存档', text: _lastExportName || '存档文件' });
+        return;
+      }
+    } catch (e) {
+      // 用户取消分享会抛 AbortError，不当作错误
+      if (e && e.name === 'AbortError') return;
+      console.warn('[DataMgr] 系统分享失败，降级复制', e);
+    }
+    // 不支持文件分享 → 降级复制文本
+    await copyLastExport();
+  }
+
+  // 复制文本：把最近导出的存档全文放进可复制的框里。带体积保护：太大不给复制（会卡死/剪贴板崩）。
+  async function copyLastExport() {
+    if (!_lastExportBlob) { UI.showToast('请先点上方任意「导出存档」生成一次存档', 2500); return; }
+    const sizeMB = _lastExportBlob.size / (1024 * 1024);
+    if (sizeMB > 3) {
+      await UI.showAlert('存档过大，无法复制', `当前存档约 ${sizeMB.toFixed(1)}MB，复制文本会导致卡顿或失败。\n\n建议改用「导出存档（纯文字）」或「导出存档（轻量）」生成体积更小的存档后再复制，或换用 Chrome / 系统浏览器直接下载。`);
+      return;
+    }
+    let text = '';
+    try { text = await _lastExportBlob.text(); } catch(_) { UI.showToast('读取存档失败', 2000); return; }
+    if (typeof UI.showCopyText === 'function') {
+      await UI.showCopyText('复制存档内容', text);
+    } else {
+      await UI.showAlert('复制存档', text);
+    }
+  }
+
   async function exportAll() {
     try {
       const gameState = await _safeGetAll('gameState');
@@ -73,16 +140,7 @@ const DataMgr = (() => {
       parts.push('}');
 
       const blob = new Blob(parts, { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `skynex-save-${new Date().toISOString().slice(0, 10)}.json`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
+      _triggerDownload(blob, `skynex-save-${new Date().toISOString().slice(0, 10)}.json`);
       UI.showToast('已导出总存档', 2000);
     } catch (e) {
       console.error('[DataMgr.exportAll]', e);
@@ -183,16 +241,7 @@ const DataMgr = (() => {
       parts.push('}');
 
       const blob = new Blob(parts, { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `skynex-save-text-${new Date().toISOString().slice(0, 10)}.json`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
+      _triggerDownload(blob, `skynex-save-text-${new Date().toISOString().slice(0, 10)}.json`);
       UI.showToast('已导出纯文字存档（不含图片）', 2500);
     } catch (e) {
       console.error('[DataMgr.exportTextOnly]', e);
@@ -243,16 +292,7 @@ const _emit = (key, value) => {
       parts.push('}');
 
       const blob = new Blob(parts, { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `skynex-save-lite-${new Date().toISOString().slice(0, 10)}.json`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
+      _triggerDownload(blob, `skynex-save-lite-${new Date().toISOString().slice(0, 10)}.json`);
       UI.showToast('已导出轻量存档（含头像，不含图库）', 2500);
     } catch (e) {
       console.error('[DataMgr.exportLite]', e);
@@ -575,7 +615,7 @@ const _emit = (key, value) => {
     return { usage: 0, quota: 0, supported: false };
   }
 
-  return { exportAll, exportTextOnly, exportLite, importAll, getLastExportAt,
+  return { exportAll, exportTextOnly, exportLite, shareLastExport, copyLastExport, importAll, getLastExportAt,
            getStorageStats, listDrawnImages, getDrawnImageData, deleteDrawnImages, deleteDrawnImagesBefore,
            scanPhoneImages, getPhoneImageCats, clearPhoneImages, getStorageEstimate };
 })();

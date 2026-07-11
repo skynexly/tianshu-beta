@@ -499,6 +499,13 @@ const Auth = (() => {
           <div class="auth-profile-item-value">含头像·不含图库</div>
           <svg class="auth-profile-item-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
         </div>
+        <div class="auth-profile-item" id="auth-profile-export-fallback" style="cursor:default;flex-direction:column;align-items:stretch">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">下载被浏览器拦截？先点上方任意导出，再用下面方式保存</div>
+          <div style="display:flex;gap:8px">
+            <button id="auth-profile-export-share" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer">分享文件</button>
+            <button id="auth-profile-export-copy" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer">复制文本</button>
+          </div>
+        </div>
         <div class="auth-profile-item" id="auth-profile-image-mgr">
           <div class="auth-profile-item-label">图片存储管理</div>
           <div class="auth-profile-item-value" id="auth-profile-image-stat">查看占用</div>
@@ -528,6 +535,8 @@ const Auth = (() => {
     document.getElementById('auth-profile-export-lite').addEventListener('click', async () => {
       try { await DataMgr.exportLite(); const el = document.getElementById('auth-profile-last-export'); if (el) el.textContent = _formatLastExport(); } catch(_) {}
     });
+    document.getElementById('auth-profile-export-share')?.addEventListener('click', () => DataMgr.shareLastExport());
+    document.getElementById('auth-profile-export-copy')?.addEventListener('click', () => DataMgr.copyLastExport());
     document.getElementById('auth-profile-image-mgr').addEventListener('click', () => _openImageManager());
     document.getElementById('auth-profile-import').addEventListener('click', () => DataMgr.importAll());
     _refreshImageStat();
@@ -616,6 +625,13 @@ const Auth = (() => {
             <div class="auth-profile-item-value">含头像·不含图库</div>
             <svg class="auth-profile-item-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
           </div>
+          <div class="auth-profile-item" id="auth-profile-export-fallback" style="cursor:default;flex-direction:column;align-items:stretch">
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">下载被浏览器拦截？先点上方任意导出，再用下面方式保存</div>
+            <div style="display:flex;gap:8px">
+              <button id="auth-profile-export-share" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer">分享文件</button>
+              <button id="auth-profile-export-copy" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer">复制文本</button>
+            </div>
+          </div>
           <div class="auth-profile-item" id="auth-profile-image-mgr">
             <div class="auth-profile-item-label">图片存储管理</div>
             <div class="auth-profile-item-value" id="auth-profile-image-stat">查看占用</div>
@@ -673,6 +689,8 @@ const Auth = (() => {
         if (el) el.textContent = _formatLastExport();
       } catch(_) {}
     });
+    document.getElementById('auth-profile-export-share')?.addEventListener('click', () => DataMgr.shareLastExport());
+    document.getElementById('auth-profile-export-copy')?.addEventListener('click', () => DataMgr.copyLastExport());
     document.getElementById('auth-profile-image-mgr').addEventListener('click', () => _openImageManager());
     _refreshImageStat();
     _refreshStorageEstimate();
