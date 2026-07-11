@@ -88,12 +88,14 @@ const DataMgr = (() => {
       await UI.showAlert('复制失败', e.message || String(e));
       return;
     }
+    UI.showToast('生成完成，长度' + (payload && payload.text ? payload.text.length : 'null') + '，准备弹框', 2500);
     _showCopyText(payload.text);
   }
 
   // 弹出可复制文本框（复用 UI.showCopyText，无则退回 alert）
   function _showCopyText(text) {
     try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
+    UI.showToast('showCopyText类型:' + (typeof UI.showCopyText), 2500);
     if (typeof UI.showCopyText === 'function') {
       UI.showCopyText('复制存档内容', text);
     } else {
