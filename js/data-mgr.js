@@ -49,39 +49,53 @@ const DataMgr = (() => {
     }
   }
 
-  // 系统分享：把最近导出的存档作为文件分享（华为浏览器通常支持系统分享，可绕开下载限制）。
-  // files 分享不被支持时自动降级为复制文本。
+  // 系统分享：直接生成纯文字存档并走系统分享（华为浏览器通常支持系统分享，可绕开下载限制）。
+  // 用纯文字（体积小、生成快、无 await 分片让出），保证分享在用户手势栈内触发，避免被安卓浏览器静默拒绝。
+  // 不支持文件分享时降级为复制文本。
   async function shareLastExport() {
-    if (!_lastExportBlob) { UI.showToast('请先点上方任意「导出存档」生成一次存档', 2500); return; }
+    let payload;
     try {
-      const file = new File([_lastExportBlob], _lastExportName || 'skynex-save.json', { type: 'application/json' });
+      payload = await _buildTextExport();
+    } catch (e) {
+      console.error('[DataMgr.shareLastExport] 生成失败', e);
+      await UI.showAlert('分享失败', e.message || String(e));
+      return;
+    }
+    try {
+      const file = new File([payload.text], payload.fileName, { type: 'application/json' });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: '天枢城存档', text: _lastExportName || '存档文件' });
+        await navigator.share({ files: [file], title: '天枢城存档', text: payload.fileName });
+        try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
         return;
       }
     } catch (e) {
-      // 用户取消分享会抛 AbortError，不当作错误
-      if (e && e.name === 'AbortError') return;
+      if (e && e.name === 'AbortError') return; // 用户主动取消分享，不算失败
       console.warn('[DataMgr] 系统分享失败，降级复制', e);
     }
-    // 不支持文件分享 → 降级复制文本
-    await copyLastExport();
+    // 不支持文件分享 → 降级复制文本（复用已生成的 text，不重复生成）
+    _showCopyText(payload.text);
   }
 
-  // 复制文本：把最近导出的存档全文放进可复制的框里。带体积保护：太大不给复制（会卡死/剪贴板崩）。
+  // 复制文本：直接生成纯文字存档，放进可复制的框里。纯文字体积可控，无需体积保护。
   async function copyLastExport() {
-    if (!_lastExportBlob) { UI.showToast('请先点上方任意「导出存档」生成一次存档', 2500); return; }
-    const sizeMB = _lastExportBlob.size / (1024 * 1024);
-    if (sizeMB > 3) {
-      await UI.showAlert('存档过大，无法复制', `当前存档约 ${sizeMB.toFixed(1)}MB，复制文本会导致卡顿或失败。\n\n建议改用「导出存档（纯文字）」或「导出存档（轻量）」生成体积更小的存档后再复制，或换用 Chrome / 系统浏览器直接下载。`);
+    let payload;
+    try {
+      payload = await _buildTextExport();
+    } catch (e) {
+      console.error('[DataMgr.copyLastExport] 生成失败', e);
+      await UI.showAlert('复制失败', e.message || String(e));
       return;
     }
-    let text = '';
-    try { text = await _lastExportBlob.text(); } catch(_) { UI.showToast('读取存档失败', 2000); return; }
+    _showCopyText(payload.text);
+  }
+
+  // 弹出可复制文本框（复用 UI.showCopyText，无则退回 alert）
+  function _showCopyText(text) {
+    try { localStorage.setItem('tianshu_last_export_at', String(Date.now())); } catch(_) {}
     if (typeof UI.showCopyText === 'function') {
-      await UI.showCopyText('复制存档内容', text);
+      UI.showCopyText('复制存档内容', text);
     } else {
-      await UI.showAlert('复制存档', text);
+      UI.showAlert('复制存档', text);
     }
   }
 
@@ -201,47 +215,55 @@ const DataMgr = (() => {
   // 纯文字导出：跳过纯图片表（drawnImages/npcAvatars），并递归剥离其余数据里
   // 内嵌的 base64 图片/字体，得到一个体积极小、永远不会 OOM 的存档。
   // 用于数据量大、带图导出闪退时的兜底备份；图片不会被保留。
+  // 生成纯文字存档：返回 { text, fileName }。供导出下载、分享、复制共用。
+  // 注意：不含 await 让出主线程的分片逻辑（纯文字体积小），保证调用者能在用户手势栈内拿到结果，
+  // 让紧随其后的 navigator.share 不会因"脱离用户手势"被安卓浏览器静默拒绝。
+  async function _buildTextExport() {
+    const gameState = _stripDataUrls(await _safeGetAll('gameState'));
+    const conversations = (gameState.find(x => x && x.key === 'conversations')?.value) || [];
+
+    const parts = [];
+    let _first = true;
+    const _emit = (key, value) => {
+      parts.push((_first ? '{' : ',') + JSON.stringify(key) + ':');
+      parts.push(_safeStringify(value === undefined ? null : value, key));
+      _first = false;
+    };
+
+    _emit('version', 4);
+    _emit('textOnly', true);
+    _emit('exportTime', new Date().toISOString());
+    _emit('messages', _stripDataUrls(await _safeGetAll('messages')));
+    _emit('memories', _stripDataUrls(await _safeGetAll('memories')));
+    _emit('settings', _stripDataUrls(await _safeGetAll('settings')));
+    _emit('characters', _stripDataUrls(await _safeGetAll('characters')));
+    _emit('gameState', gameState);
+    _emit('conversations', conversations);
+    _emit('worldviews', _stripDataUrls(await _safeGetAll('worldviews')));
+    _emit('archives', _stripDataUrls(await _safeGetAll('archives')));
+    _emit('summaries', _stripDataUrls(await _safeGetAll('summaries')));
+    _emit('singleCards', _stripDataUrls(await _safeGetAll('singleCards')));
+    _emit('lorebooks', _stripDataUrls(await _safeGetAll('lorebooks')));
+    // 图片表整表跳过：导出空数组占位，导入端遇到空数组即不写入
+    _emit('npcAvatars', []);
+    _emit('drawnImages', []);
+    // 主题配置里可能含 chatBgImage/customFontData，解析后剥离再写回字符串
+    let themeConfig = localStorage.getItem('themeConfig') || null;
+    try { if (themeConfig) themeConfig = JSON.stringify(_stripDataUrls(JSON.parse(themeConfig))); } catch(_) {}
+    let themePresets = localStorage.getItem('themeCustomPresets') || null;
+    try { if (themePresets) themePresets = JSON.stringify(_stripDataUrls(JSON.parse(themePresets))); } catch(_) {}
+    _emit('themeConfig', themeConfig);
+    _emit('themeCustomPresets', themePresets);
+    parts.push('}');
+
+    return { text: parts.join(''), fileName: `skynex-save-text-${new Date().toISOString().slice(0, 10)}.json` };
+  }
+
   async function exportTextOnly() {
     try {
-      const gameState = _stripDataUrls(await _safeGetAll('gameState'));
-      const conversations = (gameState.find(x => x && x.key === 'conversations')?.value) || [];
-
-      const parts = [];
-      let _first = true;
-      const _emit = (key, value) => {
-        parts.push((_first ? '{' : ',') + JSON.stringify(key) + ':');
-        parts.push(_safeStringify(value === undefined ? null : value, key));
-        _first = false;
-      };
-
-      _emit('version', 4);
-      _emit('textOnly', true);
-      _emit('exportTime', new Date().toISOString());
-      _emit('messages', _stripDataUrls(await _safeGetAll('messages')));
-      _emit('memories', _stripDataUrls(await _safeGetAll('memories')));
-      _emit('settings', _stripDataUrls(await _safeGetAll('settings')));
-      _emit('characters', _stripDataUrls(await _safeGetAll('characters')));
-      _emit('gameState', gameState);
-      _emit('conversations', conversations);
-      _emit('worldviews', _stripDataUrls(await _safeGetAll('worldviews')));
-      _emit('archives', _stripDataUrls(await _safeGetAll('archives')));
-      _emit('summaries', _stripDataUrls(await _safeGetAll('summaries')));
-      _emit('singleCards', _stripDataUrls(await _safeGetAll('singleCards')));
-      _emit('lorebooks', _stripDataUrls(await _safeGetAll('lorebooks')));
-      // 图片表整表跳过：导出空数组占位，导入端遇到空数组即不写入
-      _emit('npcAvatars', []);
-      _emit('drawnImages', []);
-      // 主题配置里可能含 chatBgImage/customFontData，解析后剥离再写回字符串
-      let themeConfig = localStorage.getItem('themeConfig') || null;
-      try { if (themeConfig) themeConfig = JSON.stringify(_stripDataUrls(JSON.parse(themeConfig))); } catch(_) {}
-      let themePresets = localStorage.getItem('themeCustomPresets') || null;
-      try { if (themePresets) themePresets = JSON.stringify(_stripDataUrls(JSON.parse(themePresets))); } catch(_) {}
-      _emit('themeConfig', themeConfig);
-      _emit('themeCustomPresets', themePresets);
-      parts.push('}');
-
-      const blob = new Blob(parts, { type: 'application/json' });
-      _triggerDownload(blob, `skynex-save-text-${new Date().toISOString().slice(0, 10)}.json`);
+      const { text, fileName } = await _buildTextExport();
+      const blob = new Blob([text], { type: 'application/json' });
+      _triggerDownload(blob, fileName);
       UI.showToast('已导出纯文字存档（不含图片）', 2500);
     } catch (e) {
       console.error('[DataMgr.exportTextOnly]', e);
